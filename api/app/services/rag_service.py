@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List
+from typing import Dict, List, Iterator
 from api.app.utils.logger import setup_logger
 from api.app.repositories.history_repo import HistoryRepo
 from api.app.services.model_registry import ModelRegistry
@@ -21,8 +21,8 @@ def system_prompt(lang: str) -> str:
 
 
 class RagService:
-    def __init__(self, collection, ollama, sqlite_conn, top_k: int, max_tokens: int, history_turns: int, default_lang: str,
-                 model_registry: ModelRegistry):
+    def __init__(self, collection, ollama, sqlite_conn, top_k: int, max_tokens: int,
+                 history_turns: int, default_lang: str, model_registry: ModelRegistry):
         self.collection = collection
         self.ollama = ollama
         self.history = HistoryRepo(sqlite_conn)
@@ -34,7 +34,6 @@ class RagService:
         self.logger = setup_logger()
 
     def _count_tokens(self, text: str) -> int:
-        # Легка оцінка: 1 токен ≈ 4 символи
         return len(text) // 4
 
     def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str):
@@ -71,35 +70,29 @@ class RagService:
         max_tokens = max_tokens or self.max_context_tokens
         truncated = []
         total_tokens = 0
-
         for block in ctx_blocks:
             block_tokens = self._count_tokens(block)
             if total_tokens + block_tokens > max_tokens:
                 break
             truncated.append(block)
             total_tokens += block_tokens
-
         return truncated
 
-    def answer(self, user_id: str, query: str, top_k: int, lang: str) -> Dict:
-        # 1. Отримати релевантні документи
+    def _prepare_messages(self, user_id: str, query: str, top_k: int, lang: str):
         res = self.collection.query(query_texts=[query], n_results=top_k)
         docs = res.get("documents", [[]])[0]
         metas = res.get("metadatas", [[]])[0]
 
-        # 2. Побудувати контекст і цитати
         ctx_blocks, citations = [], []
         for d, m in zip(docs, metas):
-            if not d:
-                continue
-            ctx_blocks.append(d)
-            citations.append({
-                "file": m.get("file_name"),
-                "path": m.get("file_path"),
-                "chunk": m.get("chunk_index")
-            })
+            if d:
+                ctx_blocks.append(d)
+                citations.append({
+                    "file": m.get("file_name"),
+                    "path": m.get("file_path"),
+                    "chunk": m.get("chunk_index")
+                })
 
-        # 3. Історія без дублікатів
         history = self.history.recall(user_id, self.history_turns)
         unique_history = []
         seen = set()
@@ -109,23 +102,24 @@ class RagService:
                 unique_history.append(msg)
                 seen.add(key)
 
-        # 4. Оцінка токенів історії
         history_token_count = sum(self._count_tokens(m["content"]) for m in unique_history)
-        available_tokens = self.max_context_tokens - history_token_count - 500  # запас для відповіді
-
-        # 5. Обрізання контексту
+        available_tokens = self.max_context_tokens - history_token_count - 500
         truncated_ctx = self._truncate_ctx_blocks(ctx_blocks, max_tokens=available_tokens)
-        self.logger.info("Truncated context blocks: %s", truncated_ctx)
 
-        # 6. Побудова prompt'ів
         messages = [{"role": "system", "content": system_prompt(lang)}]
         messages.append(self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang)[-1])
 
-        self.logger.info("Messages: %s", messages)
-        self.logger.info("Estimated token count: %d", sum(self._count_tokens(m["content"]) for m in messages))
+        return messages, citations
 
-        # 7. Виклик моделі
+    def _save_history(self, user_id: str, query: str, answer: str):
+        now = int(time.time())
+        self.history.append(user_id, "user", query, now)
+        self.history.append(user_id, "assistant", answer, now)
+
+    def answer(self, user_id: str, query: str, top_k: int, lang: str) -> Dict:
+        messages, citations = self._prepare_messages(user_id, query, top_k, lang)
         chat_model = self.registry.get_chat_model()
+
         start = time.time()
         out = self.ollama.chat(
             model=chat_model,
@@ -136,12 +130,38 @@ class RagService:
         duration = time.time() - start
         answer = out["message"]["content"]
 
-        self.logger.info("LLM response: %s", answer)
+        self._save_history(user_id, query, answer)
         self.logger.info("LLM response time: %.2f seconds", duration)
-
-        # 8. Зберегти історію
-        now = int(time.time())
-        self.history.append(user_id, "user", query, now)
-        self.history.append(user_id, "assistant", answer, now)
-
         return {"answer": answer, "citations": citations}
+
+    def stream_answer(self, user_id: str, query: str, top_k: int, lang: str) -> Iterator[Dict]:
+        messages, citations = self._prepare_messages(user_id, query, top_k, lang)
+        chat_model = self.registry.get_chat_model()
+        buffer = ""
+        chunk_size = 10
+
+        for chunk in self.ollama.chat(
+                model=chat_model,
+                messages=messages,
+                stream=True,
+                options={"temperature": 0.2},
+                keep_alive="15m"
+        ):
+            text = chunk.get("message", {}).get("content", "")
+            if text:
+                buffer += text
+                while len(buffer) >= chunk_size:
+                    yield {"type": "partial", "content": buffer[:chunk_size]}
+                    buffer = buffer[chunk_size:]
+
+        if buffer:
+            yield {"type": "partial", "content": buffer}
+
+        final_text = buffer
+        self._save_history(user_id, query, final_text)
+        yield {"type": "final", "content": final_text, "citations": citations}
+
+
+
+
+
