@@ -3,15 +3,15 @@ import os
 from datetime import datetime
 
 
-def setup_logger(name: str = "rag", log_dir: str = "logs", level=logging.INFO) -> logging.Logger:
+def setup_logger(name: str = "api", log_dir: str = "logs", level=logging.INFO) -> logging.Logger:
     os.makedirs(log_dir, exist_ok=True)
 
     log_date = datetime.now().strftime("%Y-%m-%d")
-    log_filename = f"rag_{log_date}.log"
+    log_filename = f"api_{log_date}.log"
     log_path = os.path.join(log_dir, log_filename)
 
     log_files = sorted(
-        [f for f in os.listdir(log_dir) if f.startswith("rag_") and f.endswith(".log")],
+        [f for f in os.listdir(log_dir) if f.startswith("api_") and f.endswith(".log")],
         reverse=True
     )
     for old_file in log_files[10:]:

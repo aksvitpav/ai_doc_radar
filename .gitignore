@@ -1,1 +1,48 @@
-/.env
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+
+# ---- Virtual environment ----
+api/.venv/
+venv/
+
+# ---- Environment files ----
+.env
+
+# ---- Logs ----
+logs/*
+!logs/.gitkeep
+
+# ---- Docker ----
+*.pid
+*.sock
+*.swp
+api/.dockerignore
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ---- Volumes (runtime data) ----
+volumes/storage/*
+volumes/chroma/*
+volumes/config/*
+!volumes/config/.gitkeep
+!volumes/chroma/.gitkeep
+!volumes/storage/.gitkeep
+
+# ---- Compiled files ----
+*.egg-info/
+build/
+dist/
+
+# ---- Test / Cache ----
+.cache/
+.coverage
+pytest_cache/

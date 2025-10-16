@@ -28,6 +28,7 @@ services:
       CONFIG_DIR: /app/config
     volumes:
       - ./api:/app/api
+      - ./logs:/app/logs
       - ./volumes/storage:/app/storage
       - ./volumes/chroma:/app/chroma
       - ./volumes/config:/app/config

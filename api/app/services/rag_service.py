@@ -131,6 +131,7 @@ class RagService:
             model=chat_model,
             messages=messages,
             options={"temperature": 0.2},
+            keep_alive="15m"
         )
         duration = time.time() - start
         answer = out["message"]["content"]
