@@ -1,9 +1,10 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
-from api.app.services.catalog_service import CatalogService
-from api.app.services.ingest_service import IngestService
-from api.app.deps import collection, ollama
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+
 from api.app.config import settings
+from api.app.deps import collection, ingest, ollama
+from api.app.services.catalog_service import CatalogService
 
 router = APIRouter()
 
@@ -12,13 +13,6 @@ catalog = CatalogService(
     storage_dir=settings.STORAGE_DIR,
     ollama=ollama,
     default_lang=settings.DEFAULT_LANG,
-)
-
-ingest = IngestService(
-    storage_dir=settings.STORAGE_DIR,
-    collection=collection,
-    chunk_size=settings.CHUNK_SIZE,
-    chunk_overlap=settings.CHUNK_OVERLAP,
 )
 
 

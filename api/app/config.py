@@ -7,9 +7,10 @@ class Settings(BaseSettings):
     CONFIG_DIR: Path = Path("/app/config")
 
     OLLAMA_URL: str = "http://ollama:11434"
-    EMBEDDING_MODEL: str = "mxbai-embed-large"
     CHAT_MODEL: str = "llama3.1:8b-instruct-q4_K_M"
-    CHAT_MODEL_MAX_CONTEXT_TOKENS: int = 4096
+    CHAT_MODEL_MAX_TOKENS: int = 4096
+    EMBEDDING_MODEL: str = "mxbai-embed-large"
+    EMBEDDING_MODEL_MAX_TOKENS: int = 1024
 
     TOP_K: int = 5
     HISTORY_TURNS: int = 4

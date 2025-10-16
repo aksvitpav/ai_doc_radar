@@ -4,22 +4,10 @@ from fastapi import APIRouter
 from starlette.responses import StreamingResponse
 
 from api.app.config import settings
-from api.app.deps import collection, get_sqlite_conn, ollama, registry
+from api.app.deps import rag
 from api.app.schemas.chat import ChatRequest, ChatResponse
-from api.app.services.rag_service import RagService
 
 router = APIRouter()
-
-rag = RagService(
-    collection=collection,
-    ollama=ollama,
-    sqlite_conn=get_sqlite_conn(),
-    top_k=settings.TOP_K,
-    max_tokens=settings.CHAT_MODEL_MAX_CONTEXT_TOKENS,
-    history_turns=settings.HISTORY_TURNS,
-    default_lang=settings.DEFAULT_LANG,
-    model_registry=registry,
-)
 
 
 @router.post("/chat", response_model=ChatResponse)

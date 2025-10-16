@@ -21,13 +21,12 @@ def system_prompt(lang: str) -> str:
 
 
 class RagService:
-    def __init__(self, collection, ollama, sqlite_conn, top_k: int, max_tokens: int,
+    def __init__(self, collection, ollama, sqlite_conn, top_k: int,
                  history_turns: int, default_lang: str, model_registry: ModelRegistry):
         self.collection = collection
         self.ollama = ollama
         self.history = HistoryRepo(sqlite_conn)
         self.top_k = top_k
-        self.max_context_tokens = max_tokens
         self.history_turns = history_turns
         self.default_lang = default_lang
         self.registry = model_registry
@@ -67,7 +66,7 @@ class RagService:
         return msgs
 
     def _truncate_ctx_blocks(self, ctx_blocks: List[str], max_tokens: int = None) -> List[str]:
-        max_tokens = max_tokens or self.max_context_tokens
+        max_tokens = max_tokens or self.registry.get_chat_model_max_tokens()
         truncated = []
         total_tokens = 0
         for block in ctx_blocks:
@@ -103,7 +102,7 @@ class RagService:
                 seen.add(key)
 
         history_token_count = sum(self._count_tokens(m["content"]) for m in unique_history)
-        available_tokens = self.max_context_tokens - history_token_count - 500
+        available_tokens = self.registry.get_chat_model_max_tokens() - history_token_count - 500
         truncated_ctx = self._truncate_ctx_blocks(ctx_blocks, max_tokens=available_tokens)
 
         messages = [{"role": "system", "content": system_prompt(lang)}]
@@ -160,8 +159,3 @@ class RagService:
         final_text = buffer
         self._save_history(user_id, query, final_text)
         yield {"type": "final", "content": final_text, "citations": citations}
-
-
-
-
-

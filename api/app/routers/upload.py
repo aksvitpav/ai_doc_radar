@@ -1,18 +1,12 @@
 from pathlib import Path
 from typing import List
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from api.app.services.ingest_service import IngestService
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
 from api.app.config import settings
-from api.app.deps import collection
+from api.app.deps import ingest
 
 router = APIRouter()
-
-ingest = IngestService(
-    storage_dir=settings.STORAGE_DIR,
-    collection=collection,
-    chunk_size=settings.CHUNK_SIZE,
-    chunk_overlap=settings.CHUNK_OVERLAP,
-)
 
 
 @router.post("/upload")
