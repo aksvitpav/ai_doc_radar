@@ -1,0 +1,41 @@
+name: ai_dr
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ai_dr_ollama_models:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia        # comment this block if CPU-only
+              count: all
+              capabilities: [ gpu ]
+  api:
+    build:
+      context: api
+    container_name: api
+    env_file:
+      - .env
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      STORAGE_DIR: /app/storage
+      CHROMA_DIR: /app/chroma
+      CONFIG_DIR: /app/config
+    volumes:
+      - ./api:/app/api
+      - ./volumes/storage:/app/storage
+      - ./volumes/chroma:/app/chroma
+      - ./volumes/config:/app/config
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ai_dr_ollama_models:

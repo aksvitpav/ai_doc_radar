@@ -1,0 +1,238 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-10-14T16:11:06Z",
+  "__export_source": "local-rag-insomnia",
+  "resources": [
+    {
+      "_id": "wrk_local_rag",
+      "_type": "workspace",
+      "name": "Local RAG API",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_local_rag",
+      "_type": "environment",
+      "parentId": "wrk_local_rag",
+      "name": "Base Environment",
+      "data": {
+        "base_url": "http://localhost:8000"
+      }
+    },
+    {
+      "_id": "req_001_healthz",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "healthz",
+      "method": "GET",
+      "url": "{{ base_url }}/healthz",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_002_sync-index",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "sync-index",
+      "method": "POST",
+      "url": "{{ base_url }}/sync-index",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_003_reindex-all",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "reindex-all",
+      "method": "POST",
+      "url": "{{ base_url }}/reindex-all",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_004_upload",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "upload",
+      "method": "POST",
+      "url": "{{ base_url }}/upload",
+      "parameters": [],
+      "headers": [],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "type": "file",
+            "name": "files",
+            "fileName": "{{ file }}"
+          }
+        ]
+      }
+    },
+    {
+      "_id": "req_005_chat",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "chat",
+      "method": "POST",
+      "url": "{{ base_url }}/chat",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\"user_id\": \"vitalii\", \"message\": \"Підсумуй документ.\", \"lang\": \"uk\"}"
+      }
+    },
+    {
+      "_id": "req_006_files:list",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "files:list",
+      "method": "GET",
+      "url": "{{ base_url }}/files?limit=50",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_007_files:list+summarize",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "files:list+summarize",
+      "method": "GET",
+      "url": "{{ base_url }}/files?limit=20&summarize=true&lang=uk",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_008_files:get",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "files:get",
+      "method": "GET",
+      "url": "{{ base_url }}/files/{{ filename }}",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_009_files:update",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "files:update",
+      "method": "PUT",
+      "url": "{{ base_url }}/files/{{ filename }}",
+      "parameters": [],
+      "headers": [],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "type": "file",
+            "name": "file",
+            "fileName": "{{ file }}"
+          }
+        ]
+      }
+    },
+    {
+      "_id": "req_010_files:delete",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "files:delete",
+      "method": "DELETE",
+      "url": "{{ base_url }}/files/{{ filename }}",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_011_models:installed",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "models:installed",
+      "method": "GET",
+      "url": "{{ base_url }}/models/installed",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_012_models:pull",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "models:pull",
+      "method": "POST",
+      "url": "{{ base_url }}/models/pull",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\"name\": \"llama3.1:8b-q4_K_M\"}"
+      }
+    },
+    {
+      "_id": "req_013_models:current",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "models:current",
+      "method": "GET",
+      "url": "{{ base_url }}/models/current",
+      "parameters": [],
+      "headers": [],
+      "body": {}
+    },
+    {
+      "_id": "req_014_models:select:chat",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "models:select:chat",
+      "method": "POST",
+      "url": "{{ base_url }}/models/select/chat",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\"model\": \"llama3.1:8b-q4_K_M\"}"
+      }
+    },
+    {
+      "_id": "req_015_models:select:embedding",
+      "_type": "request",
+      "parentId": "wrk_local_rag",
+      "name": "models:select:embedding",
+      "method": "POST",
+      "url": "{{ base_url }}/models/select/embedding",
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\"model\": \"mxbai-embed-large\", \"reindex\": true}"
+      }
+    }
+  ]
+}
