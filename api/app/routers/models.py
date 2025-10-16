@@ -87,7 +87,6 @@ def current_models():
 @router.post("/models/select/chat")
 def select_chat_model(req: SelectChatRequest):
     if req.model not in get_installed_model_names():
-        logger.info(get_installed_model_names())
         raise HTTPException(status_code=400, detail=f"Model '{req.model}' is not installed. Please pull it first.")
 
     max_tokens = req.max_tokens
