@@ -6,6 +6,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from api.app.utils.logger import setup_logger
 from api.app.repositories.history_repo import HistoryRepo
 from api.app.services.model_registry import ModelRegistry
+
+
 def system_prompt(lang: str) -> str:
     if lang.lower().startswith("uk"):
         return (
@@ -19,20 +21,6 @@ def system_prompt(lang: str) -> str:
         "Answer ONLY using the provided context; if not present, say you don't know. "
         "Cite filenames when applicable."
     )
-
-
-def filter_relevant_history(query_embedding: List[float], history: List[Dict], threshold: float = 0.8, current_model: str = "") -> List[Dict]:
-    relevant = []
-    for msg in history:
-        emb = msg.get("embedding")
-        model = msg.get("embedding_model")
-        if emb and model == current_model and msg["role"] == "user":
-            sim = cosine_similarity([query_embedding], [emb])[0][0]
-            if sim >= threshold:
-                relevant.append(msg)
-        elif msg["role"] == "assistant":
-            relevant.append(msg)
-    return relevant
 
 
 class RagService:
@@ -74,11 +62,27 @@ class RagService:
                 "Cite filenames when applicable."
             )
 
+    @staticmethod
+    def filter_relevant_history(query_embedding: List[float], history: List[Dict], threshold: float = 0.8,
+                                current_model: str = "") -> List[Dict]:
+        relevant = []
+        for msg in history:
+            emb = msg.get("embedding")
+            model = msg.get("embedding_model")
+            if emb and model == current_model and msg["role"] == "user":
+                sim = cosine_similarity([query_embedding], [emb])[0][0]
+                if sim >= threshold:
+                    relevant.append(msg)
+            elif msg["role"] == "assistant":
+                relevant.append(msg)
+        return relevant
+
     def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str,
                         query_embedding: List[float], embedding_model: str) -> List[Dict]:
         messages = [{"role": "system", "content": system_prompt(lang)}]
         raw_history = self.history.recall(user_id, self.history_turns)
-        filtered_history = filter_relevant_history(query_embedding, raw_history, current_model=embedding_model)
+        filtered_history = self.filter_relevant_history(query_embedding=query_embedding, history=raw_history,
+                                                        current_model=embedding_model)
         messages.extend(filtered_history)
         user_prompt = self._build_user_prompt(query, ctx_blocks, lang)
         messages.append({"role": "user", "content": user_prompt})

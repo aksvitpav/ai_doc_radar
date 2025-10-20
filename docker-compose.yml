@@ -26,12 +26,14 @@ services:
       STORAGE_DIR: /app/storage
       CHROMA_DIR: /app/chroma
       CONFIG_DIR: /app/config
+      HISTORY_DIR: /app/history
     volumes:
       - ./api:/app/api
       - ./logs:/app/logs
       - ./volumes/storage:/app/storage
       - ./volumes/chroma:/app/chroma
       - ./volumes/config:/app/config
+      - ./volumes/history:/app/history
     ports:
       - "8000:8000"
     depends_on:

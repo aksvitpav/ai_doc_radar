@@ -33,9 +33,11 @@ Thumbs.db
 volumes/storage/*
 volumes/chroma/*
 volumes/config/*
+volumes/history/*
 !volumes/config/.gitkeep
 !volumes/chroma/.gitkeep
 !volumes/storage/.gitkeep
+!volumes/history/.gitkeep
 
 # ---- Compiled files ----
 *.egg-info/

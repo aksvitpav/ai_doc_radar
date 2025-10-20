@@ -56,7 +56,7 @@ def rebuild_collection_with_embedding(embed_model: str):
 
 
 def get_sqlite_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect("/app/chat_history.db", check_same_thread=False)
+    conn = sqlite3.connect("/app/history/chat_history.db", check_same_thread=False)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS history (
