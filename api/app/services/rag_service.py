@@ -35,12 +35,9 @@ class RagService:
     def _count_tokens(self, text: str) -> int:
         return len(text) // 4
 
-    def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str):
-        msgs = [{"role": "system", "content": system_prompt(lang)}]
-        msgs.extend(self.history.recall(user_id, self.history_turns))
-
+    def _build_user_prompt(self, query: str, ctx_blocks: List[str], lang: str) -> str:
         if lang.lower().startswith("uk"):
-            user_prompt = (
+            return (
                 f"Питання: {query}\n"
                 f"Контекст: {' --- '.join(ctx_blocks)}\n\n"
                 "Відповідай лише на основі контексту. "
@@ -51,7 +48,7 @@ class RagService:
                 "Наприкінці за можливості наведи назви файлів (цитації)."
             )
         else:
-            user_prompt = (
+            return (
                 f"Question: {query}\n"
                 f"Context: {' --- '.join(ctx_blocks)}\n\n"
                 "Answer only using the context. "
@@ -62,8 +59,12 @@ class RagService:
                 "Cite filenames when applicable."
             )
 
-        msgs.append({"role": "user", "content": user_prompt})
-        return msgs
+    def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str) -> List[Dict]:
+        messages = [{"role": "system", "content": system_prompt(lang)}]
+        messages.extend(self.history.recall(user_id, self.history_turns))
+        user_prompt = self._build_user_prompt(query, ctx_blocks, lang)
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
 
     def _truncate_ctx_blocks(self, ctx_blocks: List[str], max_tokens: int = None) -> List[str]:
         max_tokens = max_tokens or self.registry.get_chat_model_max_tokens()
@@ -105,9 +106,7 @@ class RagService:
         available_tokens = self.registry.get_chat_model_max_tokens() - history_token_count - 500
         truncated_ctx = self._truncate_ctx_blocks(ctx_blocks, max_tokens=available_tokens)
 
-        messages = [{"role": "system", "content": system_prompt(lang)}]
-        messages.append(self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang)[-1])
-
+        messages = self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang)
         return messages, citations
 
     def _save_history(self, user_id: str, query: str, answer: str):
