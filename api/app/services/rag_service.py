@@ -14,11 +14,13 @@ def system_prompt(lang: str) -> str:
             "Ти — корисний помічник для пошуку по документах українською. "
             "Відповідай ЛИШЕ на основі наданого контексту. "
             "Якщо відповіді немає у контексті — скажи, що не знаєш. "
+            "Історію враховуй лише якщо вона явно пов’язана з новим питанням. "
             "Наприкінці за можливості наведи назви файлів (цитації)."
         )
     return (
         "You are a helpful assistant for document QA. "
         "Answer ONLY using the provided context; if not present, say you don't know. "
+        "Consider the conversation history ONLY if it is clearly related to the current question. "
         "Cite filenames when applicable."
     )
 
@@ -63,30 +65,85 @@ class RagService:
             )
 
     @staticmethod
-    def filter_relevant_history(query_embedding: List[float], history: List[Dict], threshold: float = 0.8,
-                                current_model: str = "") -> List[Dict]:
+    def filter_relevant_history(
+            query_embedding: List[float],
+            history: List[Dict],
+            threshold: float = 0.92,
+            current_model: str = "",
+            max_pairs: int = 2
+    ) -> List[Dict]:
         relevant = []
-        for msg in history:
-            emb = msg.get("embedding")
-            model = msg.get("embedding_model")
-            if emb and model == current_model and msg["role"] == "user":
-                sim = cosine_similarity([query_embedding], [emb])[0][0]
-                if sim >= threshold:
-                    relevant.append(msg)
-            elif msg["role"] == "assistant":
-                relevant.append(msg)
+        temp_pair = []
+
+        for msg in reversed(history):
+            if msg["role"] == "assistant":
+                temp_pair.insert(0, msg)
+            elif msg["role"] == "user":
+                emb = msg.get("embedding")
+                model = msg.get("embedding_model")
+                if emb and model == current_model:
+                    sim = cosine_similarity([query_embedding], [emb])[0][0]
+                    if sim >= threshold:
+                        temp_pair.insert(0, msg)
+                        relevant = temp_pair + relevant
+                        temp_pair = []
+                        if len(relevant) // 2 >= max_pairs:
+                            break
+                    else:
+                        temp_pair = []
+                else:
+                    temp_pair = []
         return relevant
 
-    def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str,
-                        query_embedding: List[float], embedding_model: str) -> List[Dict]:
-        messages = [{"role": "system", "content": system_prompt(lang)}]
-        raw_history = self.history.recall(user_id, self.history_turns)
-        filtered_history = self.filter_relevant_history(query_embedding=query_embedding, history=raw_history,
-                                                        current_model=embedding_model)
-        messages.extend(filtered_history)
+    def _build_messages(
+            self,
+            user_id: str,
+            query: str,
+            ctx_blocks: List[str],
+            lang: str,
+            query_embedding: List[float],
+            embedding_model: str
+    ) -> List[Dict]:
+        max_tokens = self.registry.get_chat_model_max_tokens()
+        system_msg = {"role": "system", "content": system_prompt(lang)}
         user_prompt = self._build_user_prompt(query, ctx_blocks, lang)
-        messages.append({"role": "user", "content": user_prompt})
+        user_msg = {"role": "user", "content": user_prompt}
+
+        system_tokens = self._count_tokens(system_msg["content"])
+        user_tokens = self._count_tokens(user_msg["content"])
+        total_tokens = system_tokens + user_tokens
+
+        messages = [system_msg]
+
+        self.logger.info("System prompt tokens: %d", system_tokens)
+        self.logger.info("User prompt tokens: %d", user_tokens)
+
+        # Add a story if it fits
+        raw_history = self.history.recall(user_id, self.history_turns)
+        filtered_history = self.filter_relevant_history(
+            query_embedding=query_embedding,
+            history=raw_history,
+            current_model=embedding_model
+        )
+
+        history_tokens = 0
+        for msg in filtered_history:
+            msg_tokens = self._count_tokens(msg["content"])
+            if total_tokens + msg_tokens >= max_tokens:
+                self.logger.info("Stopped adding history: token limit exceeded (%d)", max_tokens)
+                break
+            messages.append(msg)
+            total_tokens += msg_tokens
+            history_tokens += msg_tokens
+            self.logger.info("History message (%s) tokens: %d", msg["role"], msg_tokens)
+
+        self.logger.info("Total history tokens added: %d", history_tokens)
+        self.logger.info("Total tokens before user prompt: %d", total_tokens)
+
+        messages.append(user_msg)
         self.logger.info("Prompt is generated: %s", user_prompt)
+        self.logger.info("Final total tokens: %d", total_tokens + user_tokens)
+
         return messages
 
     def _truncate_ctx_blocks(self, ctx_blocks: List[str], max_tokens: int = None) -> List[str]:
@@ -109,19 +166,30 @@ class RagService:
 
         self.logger.info("Relevance scores (distance): %s", distances)
 
+        min_similarity = 0.75
+
         ctx_blocks, citations = [], []
+
         for i in range(min(top_k, len(docs))):
             doc = docs[i]
             meta = metas[i]
-            score = distances[i]
+            distance = distances[i]
+            similarity = 1 - distance
+
+            if similarity < min_similarity:
+                self.logger.info("Chunk %d skipped due to low similarity: %.4f", i, similarity)
+                continue
 
             ctx_blocks.append(doc)
             citations.append({
                 "file": meta.get("file_name"),
                 "path": meta.get("file_path"),
-                "chunk": meta.get("chunk_index")
+                "download_url": f"/files/download/{meta.get('file_id') or meta.get('file_name')}",
+                "chunk": meta.get("chunk_index"),
+                "chunk_score": similarity,
+                "chunk_text": doc
             })
-            self.logger.info("Chunk selected: %.4f | %s", score, doc[:100].replace("\n", " "))
+            self.logger.info("Chunk selected: %.4f | %s", similarity, doc[:100].replace("\n", " "))
 
         embedding_model = self.registry.get_embedding_model()
         query_embedding = self.ollama.embeddings(model=embedding_model, prompt=query)["embedding"]

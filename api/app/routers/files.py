@@ -1,6 +1,8 @@
+import os
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from starlette.responses import FileResponse
 
 from api.app.config import settings
 from api.app.deps import collection, ingest, ollama
@@ -41,3 +43,11 @@ async def update_file(filename: str, file: UploadFile = File(...)):
 @router.delete("/files/{filename}")
 def delete_file(filename: str):
     return ingest.delete_file_and_index(filename)
+
+
+@router.get("/files/download/{file_name}")
+def download_file(file_name: str):
+    file_path = os.path.join(settings.STORAGE_DIR, file_name)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=file_name, media_type='application/octet-stream')
