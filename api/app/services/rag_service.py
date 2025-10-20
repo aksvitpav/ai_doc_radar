@@ -64,6 +64,7 @@ class RagService:
         messages.extend(self.history.recall(user_id, self.history_turns))
         user_prompt = self._build_user_prompt(query, ctx_blocks, lang)
         messages.append({"role": "user", "content": user_prompt})
+        self.logger.info("Prompt is generated: %s", user_prompt)
         return messages
 
     def _truncate_ctx_blocks(self, ctx_blocks: List[str], max_tokens: int = None) -> List[str]:
@@ -82,16 +83,23 @@ class RagService:
         res = self.collection.query(query_texts=[query], n_results=top_k)
         docs = res.get("documents", [[]])[0]
         metas = res.get("metadatas", [[]])[0]
+        distances = res.get("distances", [[]])[0]
+
+        self.logger.info("Relevance scores (distance): %s", distances)
 
         ctx_blocks, citations = [], []
-        for d, m in zip(docs, metas):
-            if d:
-                ctx_blocks.append(d)
-                citations.append({
-                    "file": m.get("file_name"),
-                    "path": m.get("file_path"),
-                    "chunk": m.get("chunk_index")
-                })
+        for i in range(min(top_k, len(docs))):
+            doc = docs[i]
+            meta = metas[i]
+            score = distances[i]
+
+            ctx_blocks.append(doc)
+            citations.append({
+                "file": meta.get("file_name"),
+                "path": meta.get("file_path"),
+                "chunk": meta.get("chunk_index")
+            })
+            self.logger.info("Chunk selected: %.4f | %s", score, doc[:100].replace("\n", " "))
 
         history = self.history.recall(user_id, self.history_turns)
         unique_history = []
