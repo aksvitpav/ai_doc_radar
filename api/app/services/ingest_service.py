@@ -4,7 +4,7 @@ from fastapi import HTTPException, UploadFile
 
 from api.app.utils.hashing import sha256_file
 from api.app.utils.extract import extract_text_from_file
-from api.app.utils.chunk import chunk_text
+from api.app.utils.chunk import chunk_text, sentence_chunk_text
 
 
 class IngestService:
@@ -29,7 +29,7 @@ class IngestService:
             self.collection.delete(where={"file_path": str(path)})
 
         text = extract_text_from_file(path)
-        chunks = chunk_text(text, size=self.chunk_size, overlap=self.chunk_overlap)
+        chunks = sentence_chunk_text(text, chunk_size=self.chunk_size, chunk_overlap=self.chunk_overlap)
 
         ids = [f"{path.name}:{file_hash}:{i}" for i in range(len(chunks))]
         metadatas = [

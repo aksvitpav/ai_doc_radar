@@ -1,4 +1,5 @@
 import time
+import threading
 from typing import Dict, List, Iterator
 from api.app.utils.logger import setup_logger
 from api.app.repositories.history_repo import HistoryRepo
@@ -117,10 +118,18 @@ class RagService:
         messages = self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang)
         return messages, citations
 
-    def _save_history(self, user_id: str, query: str, answer: str):
-        now = int(time.time())
-        self.history.append(user_id, "user", query, now)
-        self.history.append(user_id, "assistant", answer, now)
+    def _save_history_async(self, user_id: str, query: str, answer: str):
+        def task():
+            try:
+                now = int(time.time())
+                embedding_model = self.registry.get_embedding_model()
+                embedding = self.ollama.embeddings(model=embedding_model, prompt=query)["embedding"]
+                self.history.append(user_id, "user", query, now, embedding_model=embedding_model, embedding=embedding)
+                self.history.append(user_id, "assistant", answer, now)
+            except Exception as e:
+                self.logger.warning("Error saving history: %s", str(e))
+
+        threading.Thread(target=task, daemon=True).start()
 
     def answer(self, user_id: str, query: str, top_k: int, lang: str) -> Dict:
         messages, citations = self._prepare_messages(user_id, query, top_k, lang)
@@ -136,7 +145,7 @@ class RagService:
         duration = time.time() - start
         answer = out["message"]["content"]
 
-        self._save_history(user_id, query, answer)
+        self._save_history_async(user_id, query, answer)
         self.logger.info("LLM response time: %.2f seconds", duration)
         return {"answer": answer, "citations": citations}
 
@@ -164,5 +173,5 @@ class RagService:
             yield {"type": "partial", "content": buffer}
 
         final_text = buffer
-        self._save_history(user_id, query, final_text)
+        self._save_history_async(user_id, query, final_text)
         yield {"type": "final", "content": final_text, "citations": citations}
