@@ -1,17 +1,16 @@
 import sqlite3
 from pathlib import Path
 import chromadb
-from chromadb.utils.embedding_functions.ollama_embedding_function import (
-    OllamaEmbeddingFunction,
-)
+from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
 from api.app.config import settings
 from api.app.services.ingest_service import IngestService
 from api.app.services.model_registry import ModelRegistry
-from ollama import Client as OllamaClient
 
 from api.app.services.rag_service import RagService
+from ollama import Client as OllamaClient
 
 CONFIG_PATH = Path(settings.CONFIG_DIR) / "runtime_config.json"
+
 registry = ModelRegistry(
     config_path=CONFIG_PATH,
     default_chat_model=settings.CHAT_MODEL,
@@ -29,9 +28,17 @@ def _make_collection(embed_model: str):
         model_name=embed_model,
     )
     try:
-        col = client.get_or_create_collection(name="documents", embedding_function=ef)
+        col = client.get_or_create_collection(
+            name="documents",
+            embedding_function=ef,
+            metadata={"hnsw:space": "cosine"}
+        )
     except Exception:
-        col = client.create_collection(name="documents", embedding_function=ef)
+        col = client.create_collection(
+            name="documents",
+            embedding_function=ef,
+            metadata={"hnsw:space": "cosine"}
+        )
     return col
 
 

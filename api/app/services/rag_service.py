@@ -130,6 +130,7 @@ class RagService:
         messages = self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang,
                                         query_embedding, embedding_model)
         return messages, citations
+
     def _save_history_async(self, user_id: str, query: str, answer: str):
         def task():
             try:

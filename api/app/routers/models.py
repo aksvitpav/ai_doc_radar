@@ -23,6 +23,7 @@ class SelectEmbeddingRequest(BaseModel):
     model: str
     max_tokens: int | None = None
     reindex: bool = True
+    force_reindex: bool = False
 
 
 def get_installed_model_names() -> list[str]:
@@ -150,7 +151,7 @@ def select_embedding_model(req: SelectEmbeddingRequest):
     }
 
     if req.reindex:
-        out = deps.ingest.reindex_all()
+        out = deps.ingest.reindex_all(force=req.force_reindex)
         out["embedding_model"] = deps.registry.get_embedding_model()
         out["embedding_model_max_tokens"] = deps.registry.get_embedding_model_max_tokens()
         out["reindexed"] = True

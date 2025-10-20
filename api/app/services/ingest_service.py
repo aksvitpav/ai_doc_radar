@@ -4,7 +4,8 @@ from fastapi import HTTPException, UploadFile
 
 from api.app.utils.hashing import sha256_file
 from api.app.utils.extract import extract_text_from_file
-from api.app.utils.chunk import chunk_text, sentence_chunk_text
+from api.app.utils.chunk import sentence_chunk_text
+from api.app import deps
 
 
 class IngestService:
@@ -14,16 +15,19 @@ class IngestService:
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
-    def upsert_file(self, path: Path) -> Dict[str, Any]:
+    def upsert_file(self, path: Path, force: bool = False) -> Dict[str, Any]:
         file_hash = sha256_file(path)
         mtime = int(path.stat().st_mtime)
+        embedding_model = deps.registry.get_embedding_model()
 
         existing = self.collection.get(
             where={"file_path": str(path)}, include=["metadatas"], limit=1_000_000
         )
         existing_hashes = {m.get("file_hash") for m in existing.get("metadatas", [])}
-        if existing_hashes and (file_hash in existing_hashes):
-            return {"indexed": False, "reason": "no_change"}
+        existing_models = {m.get("embedding_model") for m in existing.get("metadatas", [])}
+
+        if not force and existing_hashes and (file_hash in existing_hashes) and embedding_model in existing_models:
+            return {"indexed": False, "reason": "no_change_and_same_model"}
 
         if existing.get("metadatas"):
             self.collection.delete(where={"file_path": str(path)})
@@ -39,6 +43,7 @@ class IngestService:
                 "file_hash": file_hash,
                 "file_mtime": mtime,
                 "chunk_index": i,
+                "embedding_model": embedding_model
             }
             for i in range(len(chunks))
         ]
@@ -47,12 +52,7 @@ class IngestService:
 
     def _list_indexed_files(self) -> Set[str]:
         data = self.collection.get(include=["metadatas"], limit=1_000_000)
-        files = set()
-        for m in data.get("metadatas", []):
-            fp = m.get("file_path")
-            if fp:
-                files.add(fp)
-        return files
+        return {m.get("file_path") for m in data.get("metadatas", []) if m.get("file_path")}
 
     def sync_index(self):
         indexed_files = self._list_indexed_files()
@@ -78,11 +78,19 @@ class IngestService:
 
         return {"deleted_from_index": deleted, "reindexed": changed}
 
-    def reindex_all(self):
+    def reindex_all(self, force: bool = False):
+        embedding_model = deps.registry.get_embedding_model()
         indexed = []
         for path in sorted(self.storage_dir.iterdir()):
             if path.is_file() and path.suffix.lower() in {".txt", ".pdf", ".docx", ".doc"}:
-                r = self.upsert_file(path)
+                existing = self.collection.get(
+                    where={"file_path": str(path)}, include=["metadatas"], limit=1_000_000
+                )
+                existing_models = {m.get("embedding_model") for m in existing.get("metadatas", [])}
+                if not force and existing_models and embedding_model in existing_models:
+                    indexed.append({"file": path.name, "indexed": False, "reason": "same_model"})
+                    continue
+                r = self.upsert_file(path, force=force)
                 indexed.append({"file": path.name, **r})
         return {"ok": True, "indexed": indexed}
 
@@ -110,5 +118,5 @@ class IngestService:
                     break
                 out.write(chunk)
 
-        r = self.upsert_file(dest)
+        r = self.upsert_file(dest, force=True)
         return {"updated": safe, **r}
