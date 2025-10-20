@@ -8,6 +8,6 @@ pypdf
 python-docx
 mammoth
 python-multipart
-tqdm
 langchain[all]
 langchain-text-splitters
+scikit-learn

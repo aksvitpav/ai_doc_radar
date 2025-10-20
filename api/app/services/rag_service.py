@@ -1,11 +1,11 @@
 import time
 import threading
 from typing import Dict, List, Iterator
+from sklearn.metrics.pairwise import cosine_similarity
+
 from api.app.utils.logger import setup_logger
 from api.app.repositories.history_repo import HistoryRepo
 from api.app.services.model_registry import ModelRegistry
-
-
 def system_prompt(lang: str) -> str:
     if lang.lower().startswith("uk"):
         return (
@@ -19,6 +19,20 @@ def system_prompt(lang: str) -> str:
         "Answer ONLY using the provided context; if not present, say you don't know. "
         "Cite filenames when applicable."
     )
+
+
+def filter_relevant_history(query_embedding: List[float], history: List[Dict], threshold: float = 0.8, current_model: str = "") -> List[Dict]:
+    relevant = []
+    for msg in history:
+        emb = msg.get("embedding")
+        model = msg.get("embedding_model")
+        if emb and model == current_model and msg["role"] == "user":
+            sim = cosine_similarity([query_embedding], [emb])[0][0]
+            if sim >= threshold:
+                relevant.append(msg)
+        elif msg["role"] == "assistant":
+            relevant.append(msg)
+    return relevant
 
 
 class RagService:
@@ -60,9 +74,12 @@ class RagService:
                 "Cite filenames when applicable."
             )
 
-    def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str) -> List[Dict]:
+    def _build_messages(self, user_id: str, query: str, ctx_blocks: List[str], lang: str,
+                        query_embedding: List[float], embedding_model: str) -> List[Dict]:
         messages = [{"role": "system", "content": system_prompt(lang)}]
-        messages.extend(self.history.recall(user_id, self.history_turns))
+        raw_history = self.history.recall(user_id, self.history_turns)
+        filtered_history = filter_relevant_history(query_embedding, raw_history, current_model=embedding_model)
+        messages.extend(filtered_history)
         user_prompt = self._build_user_prompt(query, ctx_blocks, lang)
         messages.append({"role": "user", "content": user_prompt})
         self.logger.info("Prompt is generated: %s", user_prompt)
@@ -102,22 +119,17 @@ class RagService:
             })
             self.logger.info("Chunk selected: %.4f | %s", score, doc[:100].replace("\n", " "))
 
-        history = self.history.recall(user_id, self.history_turns)
-        unique_history = []
-        seen = set()
-        for msg in history:
-            key = (msg["role"], msg["content"])
-            if key not in seen:
-                unique_history.append(msg)
-                seen.add(key)
+        embedding_model = self.registry.get_embedding_model()
+        query_embedding = self.ollama.embeddings(model=embedding_model, prompt=query)["embedding"]
 
-        history_token_count = sum(self._count_tokens(m["content"]) for m in unique_history)
+        history = self.history.recall(user_id, self.history_turns)
+        history_token_count = sum(self._count_tokens(m["content"]) for m in history)
         available_tokens = self.registry.get_chat_model_max_tokens() - history_token_count - 500
         truncated_ctx = self._truncate_ctx_blocks(ctx_blocks, max_tokens=available_tokens)
 
-        messages = self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang)
+        messages = self._build_messages(user_id, query, truncated_ctx, lang or self.default_lang,
+                                        query_embedding, embedding_model)
         return messages, citations
-
     def _save_history_async(self, user_id: str, query: str, answer: str):
         def task():
             try:
